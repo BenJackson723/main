@@ -98,7 +98,10 @@ async function getData() {
 export default async function OverviewPage() {
   let data: Awaited<ReturnType<typeof getData>> | null = null
   let error: string | null = null
-  try { data = await getData() } catch (err: any) { error = err?.message }
+  try { data = await getData() } catch (err: any) {
+    error = `${err?.message ?? 'Unknown error'} (code: ${err?.code ?? 'none'})`
+    console.error('Overview DB error:', err)
+  }
 
   const fmt = (n: any) => n != null ? Number(n).toLocaleString() : '—'
 
