@@ -10,53 +10,88 @@ async function getData() {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const start30d = new Date(Date.now() - 30 * 86400000)
 
-  const [
-    totalLeads, leadsThisMonth, leadsLastMonth, leadsToday,
-    totalUsers, newUsersThisMonth,
-    activeSubscriptions, cancelledThisMonth,
-    purchasesThisMonth, totalPurchases,
-    unlocksThisMonth, totalUnlocks,
-    creditVolume, assignmentsThisMonth,
-    funnelSubmissions, leadsLast30d,
-  ] = await Promise.all([
-    sql`SELECT COUNT(*)::int FROM leads`,
-    sql`SELECT COUNT(*)::int FROM leads WHERE created_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM leads WHERE created_at >= ${startOfLastMonth} AND created_at < ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM leads WHERE created_at >= ${startOfToday}`,
-    sql`SELECT COUNT(*)::int FROM users`,
-    sql`SELECT COUNT(*)::int FROM users WHERE created_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM agent_subscriptions WHERE status = 'active'`,
-    sql`SELECT COUNT(*)::int FROM agent_subscriptions WHERE cancelled_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM lead_purchases WHERE created_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM lead_purchases`,
-    sql`SELECT COUNT(*)::int FROM lead_unlocks WHERE created_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM lead_unlocks`,
-    sql`SELECT COALESCE(SUM(ABS(amount)), 0)::int as total FROM credit_transactions WHERE created_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM lead_assignments WHERE created_at >= ${startOfMonth}`,
-    sql`SELECT COUNT(*)::int FROM funnel_submissions WHERE created_at >= ${startOfMonth}`,
+  const [statsRows, leadsLast30d] = await Promise.all([
+    sql`
+      WITH
+        lead_counts AS (
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month,
+            COUNT(*) FILTER (WHERE created_at >= ${startOfLastMonth} AND created_at < ${startOfMonth})::int AS last_month,
+            COUNT(*) FILTER (WHERE created_at >= ${startOfToday})::int AS today
+          FROM leads
+        ),
+        user_counts AS (
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS new_this_month
+          FROM users
+        ),
+        sub_counts AS (
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+            COUNT(*) FILTER (WHERE cancelled_at >= ${startOfMonth})::int AS cancelled_this_month
+          FROM agent_subscriptions
+        ),
+        purchase_counts AS (
+          SELECT
+            COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month,
+            COUNT(*)::int AS total
+          FROM lead_purchases
+        ),
+        unlock_counts AS (
+          SELECT
+            COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month,
+            COUNT(*)::int AS total
+          FROM lead_unlocks
+        ),
+        credit_vol AS (
+          SELECT COALESCE(SUM(ABS(amount)) FILTER (WHERE created_at >= ${startOfMonth}), 0)::int AS volume
+          FROM credit_transactions
+        ),
+        assign_counts AS (
+          SELECT COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month
+          FROM lead_assignments
+        ),
+        funnel_counts AS (
+          SELECT COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month
+          FROM funnel_submissions
+        )
+      SELECT
+        l.total AS leads_total, l.this_month AS leads_this_month, l.last_month AS leads_last_month, l.today AS leads_today,
+        u.total AS users_total, u.new_this_month AS users_new_this_month,
+        s.active AS subs_active, s.cancelled_this_month AS subs_cancelled,
+        p.this_month AS purchases_this_month, p.total AS purchases_total,
+        un.this_month AS unlocks_this_month, un.total AS unlocks_total,
+        c.volume AS credit_volume,
+        a.this_month AS assignments_this_month,
+        f.this_month AS funnel_submissions
+      FROM lead_counts l, user_counts u, sub_counts s, purchase_counts p, unlock_counts un, credit_vol c, assign_counts a, funnel_counts f
+    `,
     sql`SELECT created_at::date as day, COUNT(*)::int as count FROM leads WHERE created_at >= ${start30d} GROUP BY day ORDER BY day`,
   ])
 
-  const thisMonth = leadsThisMonth[0].count
-  const lastMonth = leadsLastMonth[0].count
+  const r = statsRows[0]
+  const thisMonth = r.leads_this_month
+  const lastMonth = r.leads_last_month
   const growthPct = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : null
 
   const byDay: Record<string, number> = {}
   for (let i = 29; i >= 0; i--) {
     byDay[new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)] = 0
   }
-  for (const r of leadsLast30d) {
-    const d = String(r.day).slice(0, 10)
-    if (d in byDay) byDay[d] = r.count
+  for (const row of leadsLast30d) {
+    const d = String(row.day).slice(0, 10)
+    if (d in byDay) byDay[d] = row.count
   }
 
   return {
-    leads: { total: totalLeads[0].count, thisMonth, lastMonth, today: leadsToday[0].count, growthPct, timeSeries: Object.entries(byDay).map(([date, count]) => ({ date, count })) },
-    users: { total: totalUsers[0].count, newThisMonth: newUsersThisMonth[0].count },
-    subscriptions: { active: activeSubscriptions[0].count, cancelledThisMonth: cancelledThisMonth[0].count },
-    transactions: { purchasesThisMonth: purchasesThisMonth[0].count, totalPurchases: totalPurchases[0].count, unlocksThisMonth: unlocksThisMonth[0].count, totalUnlocks: totalUnlocks[0].count, creditVolumeThisMonth: creditVolume[0].total },
-    assignments: { thisMonth: assignmentsThisMonth[0].count },
-    funnels: { submissionsThisMonth: funnelSubmissions[0].count },
+    leads: { total: r.leads_total, thisMonth, lastMonth, today: r.leads_today, growthPct, timeSeries: Object.entries(byDay).map(([date, count]) => ({ date, count })) },
+    users: { total: r.users_total, newThisMonth: r.users_new_this_month },
+    subscriptions: { active: r.subs_active, cancelledThisMonth: r.subs_cancelled },
+    transactions: { purchasesThisMonth: r.purchases_this_month, totalPurchases: r.purchases_total, unlocksThisMonth: r.unlocks_this_month, totalUnlocks: r.unlocks_total, creditVolumeThisMonth: r.credit_volume },
+    assignments: { thisMonth: r.assignments_this_month },
+    funnels: { submissionsThisMonth: r.funnel_submissions },
   }
 }
 
