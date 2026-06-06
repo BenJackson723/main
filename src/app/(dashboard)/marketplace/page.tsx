@@ -5,6 +5,7 @@ import StatCard from '@/components/StatCard'
 
 export default async function MarketplacePage() {
   let listings: any[] = [], assignments: any[] = [], events: any[] = []
+  let dbError: string | null = null
 
   try {
     ;[listings, assignments, events] = await Promise.all([
@@ -13,6 +14,7 @@ export default async function MarketplacePage() {
       sql`SELECT event_type, created_at, metadata FROM assignment_events ORDER BY created_at DESC LIMIT 50`,
     ])
   } catch (err: any) {
+    dbError = `${err?.message} (code: ${err?.code ?? 'none'})`
     console.error('Marketplace error:', err?.message)
   }
 
@@ -28,6 +30,12 @@ export default async function MarketplacePage() {
         <h1 className="text-2xl font-bold text-white">Marketplace</h1>
         <p className="text-gray-400 text-sm mt-1">Listings, assignments, activity</p>
       </div>
+
+      {dbError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300 text-sm">
+          ⚠️ Database error: {dbError}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Listings" value={listings.length} color="blue" />

@@ -9,6 +9,11 @@ interface Props { data: any }
 
 export default function AgentsClient({ data }: Props) {
   if (!data) return <div className="text-gray-500">No data available</div>
+  if (data.error) return (
+    <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300 text-sm">
+      ⚠️ Database error: {data.error}
+    </div>
+  )
 
   const active = data.statusBreakdown?.find((s: any) => s.status === 'active')?.count ?? 0
   const cancelled = data.statusBreakdown?.find((s: any) => s.status === 'cancelled')?.count ?? 0

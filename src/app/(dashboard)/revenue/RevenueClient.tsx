@@ -9,7 +9,7 @@ interface Props { supabase: any; stripe: any }
 
 export default function RevenueClient({ supabase, stripe }: Props) {
   const hasStripe = stripe && !stripe.error
-  const hasSupabase = !!supabase
+  const hasSupabase = supabase && !supabase.error
 
   const creditFormatted = (supabase?.creditTimeSeries ?? []).map((d: any) => ({
     ...d,
@@ -42,7 +42,12 @@ export default function RevenueClient({ supabase, stripe }: Props) {
         )}
       </div>
 
-      {/* Stripe alert if down */}
+      {/* DB / Stripe error banners */}
+      {supabase?.error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300 text-sm">
+          ⚠️ Database error: {supabase.error}
+        </div>
+      )}
       {!hasStripe && (
         <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-300 text-sm">
           ⚠️ Stripe data unavailable — {stripe?.error ?? 'check API key and allowlist'}

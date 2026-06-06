@@ -5,6 +5,7 @@ import StatCard from '@/components/StatCard'
 
 export default async function CampaignsPage() {
   let messages: any[] = [], sends: any[] = [], sequences: any[] = [], notifQueue: any[] = []
+  let dbError: string | null = null
 
   try {
     ;[messages, sends, sequences, notifQueue] = await Promise.all([
@@ -14,6 +15,7 @@ export default async function CampaignsPage() {
       sql`SELECT * FROM notification_queue ORDER BY created_at DESC LIMIT 30`,
     ])
   } catch (err: any) {
+    dbError = `${err?.message} (code: ${err?.code ?? 'none'})`
     console.error('Campaigns error:', err?.message)
   }
 
@@ -32,6 +34,12 @@ export default async function CampaignsPage() {
         <h1 className="text-2xl font-bold text-white">Campaigns</h1>
         <p className="text-gray-400 text-sm mt-1">Email campaigns, sequences, notifications</p>
       </div>
+
+      {dbError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300 text-sm">
+          ⚠️ Database error: {dbError}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Campaign Messages" value={messages.length} color="blue" />
