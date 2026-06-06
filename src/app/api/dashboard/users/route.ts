@@ -1,69 +1,69 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import sql from '@/lib/db'
 
 export async function GET() {
   try {
-    const start30d = new Date(Date.now() - 30 * 86400000).toISOString()
+    const start30d = new Date(Date.now() - 30 * 86400000)
 
-    const [users, auditEvents, notifications, onboarding] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id, email, created_at, full_name, phone, avatar_url')
-        .order('created_at', { ascending: false })
-        .limit(100),
-      supabase
-        .from('user_audit_events')
-        .select('event_type, created_at, user_id, metadata')
-        .gte('created_at', start30d)
-        .order('created_at', { ascending: false })
-        .limit(100),
-      supabase
-        .from('user_notifications')
-        .select('type, read_at, created_at')
-        .gte('created_at', start30d),
-      supabase
-        .from('onboarding_surveys')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50),
+    const [recentUsers, signupsByDay, auditEventTypes, notificationStats, onboarding] = await Promise.all([
+      sql`
+        SELECT id, email, full_name, phone, created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 100
+      `,
+      sql`
+        SELECT created_at::date as day, COUNT(*) as count
+        FROM users
+        WHERE created_at >= ${start30d}
+        GROUP BY day
+        ORDER BY day
+      `,
+      sql`
+        SELECT event_type, COUNT(*) as count
+        FROM user_audit_events
+        WHERE created_at >= ${start30d}
+        GROUP BY event_type
+        ORDER BY count DESC
+        LIMIT 15
+      `,
+      sql`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE read_at IS NOT NULL) as read
+        FROM user_notifications
+        WHERE created_at >= ${start30d}
+      `,
+      sql`
+        SELECT *
+        FROM onboarding_surveys
+        ORDER BY created_at DESC
+        LIMIT 50
+      `,
     ])
 
-    // Signups per day last 30d
-    const signupsByDay: Record<string, number> = {}
+    // Zero-fill signups
+    const byDay: Record<string, number> = {}
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
-      signupsByDay[d] = 0
+      byDay[new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)] = 0
     }
-    for (const u of users.data ?? []) {
-      const day = (u.created_at as string).slice(0, 10)
-      if (day in signupsByDay) signupsByDay[day]++
-    }
-
-    // Audit event types
-    const eventCounts: Record<string, number> = {}
-    for (const e of auditEvents.data ?? []) {
-      const k = e.event_type ?? 'unknown'
-      eventCounts[k] = (eventCounts[k] ?? 0) + 1
+    for (const row of signupsByDay) {
+      const d = String(row.day).slice(0, 10)
+      if (d in byDay) byDay[d] = Number(row.count)
     }
 
-    // Notification read rate
-    const totalNotifs = notifications.data?.length ?? 0
-    const readNotifs = (notifications.data ?? []).filter(n => n.read_at).length
+    const total = Number(notificationStats[0].total)
+    const read = Number(notificationStats[0].read)
 
     return NextResponse.json({
-      recentUsers: users.data ?? [],
-      signupsTimeSeries: Object.entries(signupsByDay).map(([date, count]) => ({ date, count })),
-      auditEvents: auditEvents.data ?? [],
-      auditEventTypes: Object.entries(eventCounts).map(([type, count]) => ({ type, count })),
-      notifications: {
-        total: totalNotifs,
-        read: readNotifs,
-        readRate: totalNotifs ? Math.round((readNotifs / totalNotifs) * 100) : 0,
-      },
-      onboarding: onboarding.data ?? [],
+      recentUsers,
+      signupsTimeSeries: Object.entries(byDay).map(([date, count]) => ({ date, count })),
+      auditEventTypes,
+      notifications: { total, read, readRate: total ? Math.round((read / total) * 100) : 0 },
+      onboarding,
     })
-  } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Failed to fetch users data' }, { status: 500 })
+  } catch (err: any) {
+    console.error('Users error:', err?.message)
+    return NextResponse.json({ error: err?.message }, { status: 500 })
   }
 }

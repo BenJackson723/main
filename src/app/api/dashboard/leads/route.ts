@@ -1,67 +1,56 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import sql from '@/lib/db'
 
 export async function GET() {
   try {
-    const start30d = new Date(Date.now() - 30 * 86400000).toISOString()
+    const start30d = new Date(Date.now() - 30 * 86400000)
 
-    const [recentLeads, leadsByFunnel, dealStages, contactAttempts, auditLog] = await Promise.all([
-      supabase
-        .from('leads')
-        .select('id, created_at, status, suburb, state, property_type, budget_min, budget_max, bedrooms')
-        .order('created_at', { ascending: false })
-        .limit(50),
-      supabase
-        .from('funnel_submissions')
-        .select('funnel_id, created_at')
-        .gte('created_at', start30d),
-      supabase
-        .from('deal_stage_history')
-        .select('stage, created_at')
-        .gte('created_at', start30d),
-      supabase
-        .from('contact_attempts')
-        .select('outcome, created_at')
-        .gte('created_at', start30d),
-      supabase
-        .from('lead_audit_log')
-        .select('action, created_at, actor_id')
-        .order('created_at', { ascending: false })
-        .limit(30),
+    const [recentLeads, dealStages, contactOutcomes, auditLog, funnelSubmissions] = await Promise.all([
+      sql`
+        SELECT id, created_at, status, suburb, state, property_type,
+               budget_min, budget_max, bedrooms
+        FROM leads
+        ORDER BY created_at DESC
+        LIMIT 50
+      `,
+      sql`
+        SELECT stage, COUNT(*) as count
+        FROM deal_stage_history
+        WHERE created_at >= ${start30d}
+        GROUP BY stage
+        ORDER BY count DESC
+      `,
+      sql`
+        SELECT outcome, COUNT(*) as count
+        FROM contact_attempts
+        WHERE created_at >= ${start30d}
+        GROUP BY outcome
+        ORDER BY count DESC
+      `,
+      sql`
+        SELECT action, created_at, actor_id
+        FROM lead_audit_log
+        ORDER BY created_at DESC
+        LIMIT 30
+      `,
+      sql`
+        SELECT funnel_id, COUNT(*) as count
+        FROM funnel_submissions
+        WHERE created_at >= ${start30d}
+        GROUP BY funnel_id
+        ORDER BY count DESC
+      `,
     ])
 
-    // Group funnel submissions
-    const funnelCounts: Record<string, number> = {}
-    for (const row of funnel_submissions(leadsByFunnel.data)) {
-      funnelCounts[row.funnel_id] = (funnelCounts[row.funnel_id] ?? 0) + 1
-    }
-
-    // Group deal stages
-    const stageCounts: Record<string, number> = {}
-    for (const row of dealStages.data ?? []) {
-      stageCounts[row.stage] = (stageCounts[row.stage] ?? 0) + 1
-    }
-
-    // Contact attempt outcomes
-    const outcomeCounts: Record<string, number> = {}
-    for (const row of contactAttempts.data ?? []) {
-      const k = row.outcome ?? 'unknown'
-      outcomeCounts[k] = (outcomeCounts[k] ?? 0) + 1
-    }
-
     return NextResponse.json({
-      recentLeads: recentLeads.data ?? [],
-      funnelSubmissions: Object.entries(funnelCounts).map(([id, count]) => ({ funnel_id: id, count })),
-      dealStages: Object.entries(stageCounts).map(([stage, count]) => ({ stage, count })),
-      contactOutcomes: Object.entries(outcomeCounts).map(([outcome, count]) => ({ outcome, count })),
-      auditLog: auditLog.data ?? [],
+      recentLeads,
+      dealStages,
+      contactOutcomes,
+      auditLog,
+      funnelSubmissions,
     })
-  } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Failed to fetch leads data' }, { status: 500 })
+  } catch (err: any) {
+    console.error('Leads error:', err?.message)
+    return NextResponse.json({ error: err?.message }, { status: 500 })
   }
-}
-
-function funnel_submissions(data: { funnel_id: string; created_at: string }[] | null) {
-  return data ?? []
 }

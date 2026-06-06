@@ -1,33 +1,28 @@
-import { supabase } from '@/lib/supabase'
-import { format, parseISO } from 'date-fns'
+import sql from '@/lib/db'
+import { format } from 'date-fns'
 import StatCard from '@/components/StatCard'
 
-async function getData() {
-  const [messages, sends, sequences, notifQueue] = await Promise.all([
-    supabase.from('campaign_messages').select('*').limit(50),
-    supabase.from('campaign_message_sends').select('status, send_at, sent_at, send_failed_at').order('created_at', { ascending: false }).limit(100),
-    supabase.from('lead_sequence_enrollments').select('*').order('created_at', { ascending: false }).limit(50),
-    supabase.from('notification_queue').select('*').order('created_at', { ascending: false }).limit(30),
-  ])
-  return {
-    messages: messages.data ?? [],
-    sends: sends.data ?? [],
-    sequences: sequences.data ?? [],
-    notifQueue: notifQueue.data ?? [],
-  }
-}
-
 export default async function CampaignsPage() {
-  let data = { messages: [] as any[], sends: [] as any[], sequences: [] as any[], notifQueue: [] as any[] }
-  try { data = await getData() } catch {}
+  let messages: any[] = [], sends: any[] = [], sequences: any[] = [], notifQueue: any[] = []
+
+  try {
+    ;[messages, sends, sequences, notifQueue] = await Promise.all([
+      sql`SELECT * FROM campaign_messages LIMIT 50`,
+      sql`SELECT status, send_at, sent_at, send_failed_at, created_at FROM campaign_message_sends ORDER BY created_at DESC LIMIT 100`,
+      sql`SELECT * FROM lead_sequence_enrollments ORDER BY created_at DESC LIMIT 50`,
+      sql`SELECT * FROM notification_queue ORDER BY created_at DESC LIMIT 30`,
+    ])
+  } catch (err: any) {
+    console.error('Campaigns error:', err?.message)
+  }
 
   const sendStatusCounts: Record<string, number> = {}
-  for (const s of data.sends) {
-    sendStatusCounts[s.status ?? 'unknown'] = (sendStatusCounts[s.status ?? 'unknown'] ?? 0) + 1
+  for (const s of sends) {
+    const k = s.status ?? 'unknown'
+    sendStatusCounts[k] = (sendStatusCounts[k] ?? 0) + 1
   }
-
-  const successRate = data.sends.length
-    ? Math.round(((sendStatusCounts['sent'] ?? 0) / data.sends.length) * 100)
+  const successRate = sends.length
+    ? Math.round(((sendStatusCounts['sent'] ?? 0) / sends.length) * 100)
     : 0
 
   return (
@@ -38,13 +33,12 @@ export default async function CampaignsPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Campaign Messages" value={data.messages.length} color="blue" />
-        <StatCard title="Recent Sends" value={data.sends.length} sub="last 100" color="green" />
+        <StatCard title="Campaign Messages" value={messages.length} color="blue" />
+        <StatCard title="Recent Sends" value={sends.length} sub="last 100" color="green" />
         <StatCard title="Send Success Rate" value={`${successRate}%`} color={successRate > 80 ? 'green' : 'orange'} />
-        <StatCard title="Notification Queue" value={data.notifQueue.length} color="purple" />
+        <StatCard title="Notification Queue" value={notifQueue.length} color="purple" />
       </div>
 
-      {/* Send status breakdown */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
         <h2 className="text-sm font-semibold text-gray-300 mb-4">Send Status Breakdown</h2>
         <div className="flex flex-wrap gap-4">
@@ -57,7 +51,6 @@ export default async function CampaignsPage() {
         </div>
       </div>
 
-      {/* Sequence enrollments */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
         <h2 className="text-sm font-semibold text-gray-300 mb-4">Lead Sequence Enrollments</h2>
         <div className="overflow-x-auto">
@@ -70,28 +63,32 @@ export default async function CampaignsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {data.sequences.slice(0, 15).map((s: any) => (
+              {sequences.slice(0, 15).map((s: any) => (
                 <tr key={s.id} className="text-gray-300 hover:bg-gray-800/50">
-                  <td className="py-3 pr-4 font-mono text-xs text-gray-500">{s.lead_id?.slice(0, 8)}…</td>
-                  <td className="py-3 pr-4 text-xs">{s.sequence_id?.slice(0, 8)}…</td>
-                  <td className="py-3 text-xs text-gray-500">{s.created_at ? format(parseISO(s.created_at), 'dd MMM yyyy') : '—'}</td>
+                  <td className="py-3 pr-4 font-mono text-xs text-gray-500">{String(s.lead_id).slice(0, 8)}…</td>
+                  <td className="py-3 pr-4 text-xs">{String(s.sequence_id ?? s.email_sequence_definition_id ?? '—').slice(0, 8)}…</td>
+                  <td className="py-3 text-xs text-gray-500">
+                    {s.created_at ? format(new Date(s.created_at), 'dd MMM yyyy') : '—'}
+                  </td>
                 </tr>
               ))}
+              {!sequences.length && <tr><td colSpan={3} className="py-4 text-gray-600 text-sm">No enrollments</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Notification queue */}
-      {data.notifQueue.length > 0 && (
+      {notifQueue.length > 0 && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
           <h2 className="text-sm font-semibold text-gray-300 mb-4">Notification Queue</h2>
           <div className="space-y-2">
-            {data.notifQueue.slice(0, 10).map((n: any, i: number) => (
+            {notifQueue.slice(0, 10).map((n: any, i: number) => (
               <div key={i} className="flex items-center gap-3 text-sm py-2 border-b border-gray-800 last:border-0">
                 <span className="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" />
                 <span className="text-gray-300">{n.type ?? n.event_type ?? '—'}</span>
-                <span className="text-gray-600 text-xs ml-auto">{n.created_at ? format(parseISO(n.created_at), 'dd MMM HH:mm') : '—'}</span>
+                <span className="text-gray-600 text-xs ml-auto">
+                  {n.created_at ? format(new Date(n.created_at), 'dd MMM HH:mm') : '—'}
+                </span>
               </div>
             ))}
           </div>
