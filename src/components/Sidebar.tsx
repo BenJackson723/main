@@ -13,6 +13,11 @@ const NAV = [
   { href: '/campaigns', label: 'Campaigns', icon: '📧' },
 ]
 
+const CRM_NAV = [
+  { href: '/crm', label: 'Pipeline', icon: '◈' },
+  { href: '/crm/contacts', label: 'Contacts', icon: '◉' },
+]
+
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -35,22 +40,45 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={clsx(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-              pathname === item.href
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            )}
-          >
-            <span>{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <div className="space-y-0.5">
+          {NAV.map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                pathname === item.href
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              )}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-gray-800">
+          <div className="px-3 mb-2 text-xs font-semibold text-gray-600 uppercase tracking-wider">Sales CRM</div>
+          <div className="space-y-0.5">
+            {CRM_NAV.map(item => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  pathname === item.href
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                )}
+              >
+                <span className="text-xs">{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
       </nav>
 
       <div className="px-3 py-4 border-t border-gray-800">
