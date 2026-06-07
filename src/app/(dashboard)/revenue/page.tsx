@@ -1,12 +1,14 @@
 export const dynamic = 'force-dynamic'
 import sql from '@/lib/db'
+import { getStripeData } from '@/lib/stripe-data'
 import RevenueClient from './RevenueClient'
 
 async function getStripe() {
   try {
-    const res = await fetch('https://main-lake-nine.vercel.app/api/dashboard/stripe', { cache: 'no-store' })
-    return res.ok ? res.json() : { error: 'unavailable' }
-  } catch { return { error: 'unavailable' } }
+    return await getStripeData()
+  } catch (err: any) {
+    return { error: err?.message ?? 'Stripe unavailable' }
+  }
 }
 
 export default async function RevenuePage() {
@@ -56,7 +58,7 @@ export default async function RevenuePage() {
       recentTransactions,
     }
   } catch (err: any) {
-    supabase = { error: err?.message }
+    supabase = { error: `${err?.message} (code: ${err?.code ?? 'none'})` }
   }
 
   const stripe = await getStripe()
