@@ -41,7 +41,7 @@ async function getData() {
         ),
         unlock_counts AS (
           SELECT
-            COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month,
+            COUNT(*) FILTER (WHERE unlocked_at >= ${startOfMonth})::int AS this_month,
             COUNT(*)::int AS total
           FROM lead_unlocks
         ),
@@ -54,7 +54,7 @@ async function getData() {
           FROM lead_assignments
         ),
         funnel_counts AS (
-          SELECT COUNT(*) FILTER (WHERE created_at >= ${startOfMonth})::int AS this_month
+          SELECT COUNT(*) FILTER (WHERE started_at >= ${startOfMonth})::int AS this_month
           FROM funnel_submissions
         )
       SELECT

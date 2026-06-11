@@ -20,7 +20,7 @@ export default async function MarketplacePage() {
 
   const statusCounts: Record<string, number> = {}
   for (const l of listings) {
-    const k = l.status ?? 'unknown'
+    const k = l.is_active ? 'active' : 'inactive'
     statusCounts[k] = (statusCounts[k] ?? 0) + 1
   }
 
@@ -60,7 +60,7 @@ export default async function MarketplacePage() {
                 {listings.slice(0, 15).map((l: any) => (
                   <tr key={l.id} className="text-gray-300 hover:bg-gray-800/50">
                     <td className="py-3 pr-4">
-                      <span className="px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-400">{l.status ?? '—'}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${l.is_active ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>{l.is_active ? 'active' : 'inactive'}</span>
                     </td>
                     <td className="py-3 text-xs text-gray-500">
                       {l.created_at ? format(new Date(l.created_at), 'dd MMM yyyy') : '—'}

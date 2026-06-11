@@ -7,7 +7,7 @@ export default async function UsersPage() {
   try {
     const start30d = new Date(Date.now() - 30 * 86400000)
     const [recentUsers, signupsByDay, auditEventTypes, notificationStats, onboarding] = await Promise.all([
-      sql`SELECT id, email, full_name, phone, created_at FROM users ORDER BY created_at DESC LIMIT 100`,
+      sql`SELECT id, email, name AS full_name, created_at FROM users ORDER BY created_at DESC LIMIT 100`,
       sql`SELECT created_at::date as day, COUNT(*)::int as count FROM users WHERE created_at >= ${start30d} GROUP BY day ORDER BY day`,
       sql`SELECT event_type, COUNT(*)::int as count FROM user_audit_events WHERE created_at >= ${start30d} GROUP BY event_type ORDER BY count DESC LIMIT 15`,
       sql`SELECT COUNT(*)::int as total, COUNT(*) FILTER (WHERE read_at IS NOT NULL)::int as read FROM user_notifications WHERE created_at >= ${start30d}`,

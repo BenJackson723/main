@@ -27,9 +27,9 @@ export default async function RevenuePage() {
         GROUP BY day ORDER BY day
       `,
       sql`SELECT type, COUNT(*)::int as count FROM credit_transactions WHERE created_at >= ${start90d} GROUP BY type ORDER BY count DESC`,
-      sql`SELECT COALESCE(SUM(p.price_cents), 0)::int as total_cents FROM agent_subscriptions s JOIN subscription_plans p ON p.id = s.plan_id WHERE s.status = 'active'`,
+      sql`SELECT COUNT(*)::int as total_cents FROM agent_subscriptions WHERE status = 'active'`,
       sql`SELECT COUNT(*)::int FROM lead_purchases WHERE created_at >= ${start90d}`,
-      sql`SELECT COUNT(*)::int FROM lead_unlocks WHERE created_at >= ${start90d}`,
+      sql`SELECT COUNT(*)::int FROM lead_unlocks WHERE unlocked_at >= ${start90d}`,
       sql`SELECT COALESCE(SUM(ABS(amount)), 0)::int as total FROM credit_transactions WHERE created_at >= ${startOfMonth} AND amount < 0`,
       sql`SELECT COALESCE(SUM(ABS(amount)), 0)::int as total FROM credit_transactions WHERE created_at >= ${startOfLastMonth} AND created_at < ${startOfMonth} AND amount < 0`,
       sql`SELECT amount, type, created_at, user_id FROM credit_transactions WHERE created_at >= ${start90d} ORDER BY created_at DESC LIMIT 50`,
@@ -49,7 +49,7 @@ export default async function RevenuePage() {
     supabase = {
       creditTimeSeries: Object.entries(byDay).map(([date, v]) => ({ date, ...v })),
       transactionTypes,
-      mrr: mrrData[0].total_cents / 100,
+      mrr: mrrData[0].total_cents,
       revenueThisMonth: thisM,
       revenueLastMonth: lastM,
       revenueGrowthPct: lastM > 0 ? Math.round(((thisM - lastM) / lastM) * 100) : null,

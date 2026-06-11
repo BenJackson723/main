@@ -72,13 +72,9 @@ export default function LeadsClient({ data }: Props) {
                       'bg-gray-700 text-gray-400'
                     }`}>{lead.status ?? '—'}</span>
                   </td>
-                  <td className="py-3 pr-4">{[lead.suburb, lead.state].filter(Boolean).join(', ') || '—'}</td>
-                  <td className="py-3 pr-4">{lead.property_type ?? '—'}</td>
-                  <td className="py-3 pr-4">
-                    {lead.budget_min || lead.budget_max
-                      ? `$${(lead.budget_min / 1000).toFixed(0)}k – $${(lead.budget_max / 1000).toFixed(0)}k`
-                      : '—'}
-                  </td>
+                  <td className="py-3 pr-4">{lead.property_purpose ?? '—'}</td>
+                  <td className="py-3 pr-4">{lead.property_budget ?? '—'}</td>
+                  <td className="py-3 pr-4">—</td>
                   <td className="py-3 text-gray-500 text-xs">
                     {lead.created_at ? format(parseISO(lead.created_at), 'dd MMM yyyy') : '—'}
                   </td>
